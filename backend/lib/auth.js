@@ -47,3 +47,17 @@ export function authorizeRole(allowedRoles) {
     next();
   };
 }
+
+// CSRF protection: double-submit cookie. For state-changing requests (non-safe), require header x-csrf-token to match csrf cookie.
+export function verifyCsrf(req, res, next) {
+  const method = req.method.toUpperCase();
+  const safe = ['GET', 'HEAD', 'OPTIONS'].includes(method);
+  if (safe) return next();
+  const csrfCookie = req.cookies && req.cookies.csrfToken;
+  const csrfHeader = req.headers['x-csrf-token'] || req.headers['x-xsrf-token'];
+  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+    return res.status(403).json({ error: 'Invalid CSRF token' });
+  }
+  next();
+}
+

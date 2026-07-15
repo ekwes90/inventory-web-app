@@ -34,8 +34,9 @@ test('login returns cookies and protected routes require authentication and role
     if (res.status !== 200) throw new Error('expected 200 for authenticated items');
 
     // Role-based tests
-    // Create an item as admin (should succeed)
-    res = await fetch(`${base}/api/items`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookies }, body: JSON.stringify({ name: 'x', sku: 'x' }) });
+    // Create an item as admin (should succeed) - needs CSRF header
+    const csrf = (cookies.match(/csrfToken=([^;\s]+)/) || [])[1];
+    res = await fetch(`${base}/api/items`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookies, 'x-csrf-token': csrf }, body: JSON.stringify({ name: 'x', sku: 'x' }) });
     if (res.status !== 201) throw new Error('admin should be able to create items');
     const created = await res.json();
 
@@ -52,12 +53,13 @@ test('login returns cookies and protected routes require authentication and role
     const staffParts = staffSetCookie ? staffSetCookie.split(/,(?=\s*[^=]+=)/) : [];
     const staffCookies = staffParts.map((p) => p.split(';')[0]).join('; ');
 
-    // Staff attempting to delete should be forbidden (403)
-    res = await fetch(`${base}/api/items/${created.id}`, { method: 'DELETE', headers: { Cookie: staffCookies } });
+    // Staff attempting to delete should be forbidden (403) - must include CSRF token
+    const staffCsrf = (staffCookies.match(/csrfToken=([^;\s]+)/) || [])[1];
+    res = await fetch(`${base}/api/items/${created.id}`, { method: 'DELETE', headers: { Cookie: staffCookies, 'x-csrf-token': staffCsrf } });
     if (res.status !== 403) throw new Error('staff should not be allowed to delete items');
 
-    // Admin can delete
-    res = await fetch(`${base}/api/items/${created.id}`, { method: 'DELETE', headers: { Cookie: cookies } });
+    // Admin can delete (include CSRF)
+    res = await fetch(`${base}/api/items/${created.id}`, { method: 'DELETE', headers: { Cookie: cookies, 'x-csrf-token': csrf } });
     if (res.status !== 204) throw new Error('admin should be able to delete items');
   } finally {
     await new Promise((resolve) => server.close(resolve));

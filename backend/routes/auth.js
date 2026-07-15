@@ -37,8 +37,17 @@ router.post('/login', async (req, res) => {
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   });
 
+  // set a non-HttpOnly CSRF token cookie for double-submit protection (rotated with access token)
+  const csrf = randomUUID();
+  res.cookie('csrfToken', csrf, {
+    httpOnly: false,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 15 * 60 * 1000
+  });
+
   // Return user info only; access token is in HttpOnly cookie
-  res.json({ user: { username: user.username, role: user.role } });
+  res.json({ user: { username: user.username, role: user.role }, csrfToken: csrf });
 });
 
 // Refresh: rotate refresh token and return new access token
@@ -76,7 +85,16 @@ router.post('/refresh', (req, res) => {
       maxAge: 15 * 60 * 1000
     });
 
-    res.json({ ok: true });
+    // rotate csrf token
+    const csrf = randomUUID();
+    res.cookie('csrfToken', csrf, {
+      httpOnly: false,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000
+    });
+
+    res.json({ ok: true, csrfToken: csrf });
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
