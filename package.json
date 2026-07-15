@@ -1,0 +1,22 @@
+{
+  "name": "sample-inventory-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"vite\"",
+    "dev:frontend": "vite",
+    "dev:backend": "npm run dev --prefix backend",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^9.2.2",
+    "vite": "^5.4.10"
+  }
+}
