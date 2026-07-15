@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,8 +16,10 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 await initDatabase();
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));
+// allow requests from the frontend and allow credentials for cookies
+app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -27,7 +30,12 @@ app.use('/api/items', itemsRouter);
 app.use('/api/stock', stockRouter);
 
 const port = process.env.PORT || 4000;
-app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Backend listening on http://localhost:${port}`);
-});
+// Only auto-listen when not running under tests
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Backend listening on http://localhost:${port}`);
+  });
+}
+
+export default app;

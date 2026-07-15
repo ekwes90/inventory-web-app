@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +15,8 @@ let db = {
     { username: 'staff', password: 'staff123', role: 'staff' }
   ],
   items: [],
-  stock_transactions: []
+  stock_transactions: [],
+  refresh_tokens: []
 };
 
 async function saveData() {
@@ -28,6 +30,34 @@ async function loadData() {
   } catch (error) {
     await saveData();
   }
+  // Ensure passwords are hashed (simple heuristic: bcrypt hashes start with $2)
+  let changed = false;
+  for (const user of db.users) {
+    if (!user.password || typeof user.password !== 'string') continue;
+    if (!user.password.startsWith('$2')) {
+      // hash and replace
+      const hash = bcrypt.hashSync(user.password, 10);
+      user.password = hash;
+      changed = true;
+    }
+  }
+  if (!Array.isArray(db.refresh_tokens)) {
+    db.refresh_tokens = [];
+    changed = true;
+  }
+  // migrate legacy refresh token entries (strings) to objects { jti, username, issued_at }
+  const migrated = db.refresh_tokens.map((rt) => {
+    if (!rt) return null;
+    if (typeof rt === 'string') {
+      return { jti: rt, username: null, issued_at: new Date().toISOString() };
+    }
+    return rt;
+  }).filter(Boolean);
+  if (migrated.length !== db.refresh_tokens.length) {
+    db.refresh_tokens = migrated;
+    changed = true;
+  }
+  if (changed) await saveData();
 }
 
 export async function initDatabase() {
@@ -54,6 +84,41 @@ export async function initDatabase() {
 export function getUser(username) {
   return db.users.find((user) => user.username === username);
 }
+
+export function validatePassword(user, plain) {
+  if (!user || !user.password) return false;
+  return bcrypt.compareSync(plain, user.password);
+}
+
+// Store refresh token objects { jti, username, issued_at } for rotation and revocation
+export function addRefreshToken(jti, username) {
+  if (!jti) return;
+  db.refresh_tokens.push({ jti, username: username || null, issued_at: new Date().toISOString() });
+  // best-effort save
+  saveData();
+}
+
+export function removeRefreshToken(jti) {
+  const idx = db.refresh_tokens.findIndex((t) => t.jti === jti);
+  if (idx !== -1) {
+    db.refresh_tokens.splice(idx, 1);
+    saveData();
+    return true;
+  }
+  return false;
+}
+
+export function hasRefreshToken(jti) {
+  return db.refresh_tokens.some((t) => t.jti === jti);
+}
+
+export function removeAllRefreshTokensForUser(username) {
+  if (!username) return;
+  const before = db.refresh_tokens.length;
+  db.refresh_tokens = db.refresh_tokens.filter((t) => t.username !== username);
+  if (db.refresh_tokens.length !== before) saveData();
+}
+
 
 export function getItems({ q, category } = {}) {
   return db.items.filter((item) => {
