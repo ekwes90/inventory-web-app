@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { signAccessToken, signRefreshToken, authenticateToken } from '../lib/auth.js';
-import { getUser, validatePassword, addRefreshToken, removeRefreshToken, hasRefreshToken } from '../db.js';
+import { getUser, validatePassword, addRefreshToken, removeRefreshToken, hasRefreshToken, removeAllRefreshTokensForUser } from '../db.js';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 
@@ -20,7 +20,7 @@ router.post('/login', async (req, res) => {
   const access = signAccessToken(user);
   const jti = randomUUID();
   const refresh = signRefreshToken(user, jti);
-  addRefreshToken(jti);
+  addRefreshToken(jti, user.username);
 
   // set HttpOnly access cookie (short-lived) and refresh cookie (longer-lived)
   res.cookie('accessToken', access, {
@@ -58,15 +58,20 @@ router.post('/refresh', (req, res) => {
   try {
     const payload = jwt.verify(refreshToken, process.env.REFRESH_JWT_SECRET || 'inventory-refresh-secret');
     const jti = payload.jti || payload?.jti;
-    if (!jti || !hasRefreshToken(jti)) return res.status(401).json({ error: 'Invalid refresh token' });
     const user = getUser(payload.username);
     if (!user) return res.status(401).json({ error: 'User not found' });
+    // If the provided jti is unknown, this may be a replay attack. Revoke all refresh tokens for the user.
+    if (!jti || !hasRefreshToken(jti)) {
+      // revoke all tokens for this user to be safe
+      removeAllRefreshTokensForUser(user.username);
+      return res.status(401).json({ error: 'Invalid refresh token' });
+    }
 
     // rotate: remove old jti and issue a new one
     removeRefreshToken(jti);
     const newJti = randomUUID();
     const newRefresh = signRefreshToken(user, newJti);
-    addRefreshToken(newJti);
+    addRefreshToken(newJti, user.username);
 
     // set new refresh cookie
     res.cookie('refreshToken', newRefresh, {

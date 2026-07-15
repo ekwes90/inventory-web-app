@@ -45,6 +45,18 @@ async function loadData() {
     db.refresh_tokens = [];
     changed = true;
   }
+  // migrate legacy refresh token entries (strings) to objects { jti, username, issued_at }
+  const migrated = db.refresh_tokens.map((rt) => {
+    if (!rt) return null;
+    if (typeof rt === 'string') {
+      return { jti: rt, username: null, issued_at: new Date().toISOString() };
+    }
+    return rt;
+  }).filter(Boolean);
+  if (migrated.length !== db.refresh_tokens.length) {
+    db.refresh_tokens = migrated;
+    changed = true;
+  }
   if (changed) await saveData();
 }
 
@@ -78,16 +90,16 @@ export function validatePassword(user, plain) {
   return bcrypt.compareSync(plain, user.password);
 }
 
-// Store refresh token identifiers (jti) for rotation and revocation
-export function addRefreshToken(jti) {
+// Store refresh token objects { jti, username, issued_at } for rotation and revocation
+export function addRefreshToken(jti, username) {
   if (!jti) return;
-  db.refresh_tokens.push(jti);
+  db.refresh_tokens.push({ jti, username: username || null, issued_at: new Date().toISOString() });
   // best-effort save
   saveData();
 }
 
 export function removeRefreshToken(jti) {
-  const idx = db.refresh_tokens.indexOf(jti);
+  const idx = db.refresh_tokens.findIndex((t) => t.jti === jti);
   if (idx !== -1) {
     db.refresh_tokens.splice(idx, 1);
     saveData();
@@ -97,8 +109,16 @@ export function removeRefreshToken(jti) {
 }
 
 export function hasRefreshToken(jti) {
-  return db.refresh_tokens.includes(jti);
+  return db.refresh_tokens.some((t) => t.jti === jti);
 }
+
+export function removeAllRefreshTokensForUser(username) {
+  if (!username) return;
+  const before = db.refresh_tokens.length;
+  db.refresh_tokens = db.refresh_tokens.filter((t) => t.username !== username);
+  if (db.refresh_tokens.length !== before) saveData();
+}
+
 
 export function getItems({ q, category } = {}) {
   return db.items.filter((item) => {
