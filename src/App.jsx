@@ -19,18 +19,11 @@ function App() {
         setStatus('Backend is unavailable. Start the backend with npm run dev:backend.');
       });
 
-    const getCookie = (name) => {
-      const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-      return m ? decodeURIComponent(m[1]) : null;
-    };
-
-    const token = getCookie('inventory_token');
-    if (token) {
-      fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
-        .then((r) => r.json())
-        .then((b) => { if (b.user) setUser(b.user); })
-        .catch(() => { /* ignore */ });
-    }
+    // Ask server who the current user is. Server will read HttpOnly access cookie.
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((b) => { if (b.user) setUser(b.user); })
+      .catch(() => { /* ignore */ });
   }, []);
 
   return (
@@ -41,7 +34,7 @@ function App() {
         <p>{status}</p>
         <div className="button-row">
           {user ? (
-            <button type="button" onClick={() => { fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => { document.cookie = 'inventory_token=; path=/; Max-Age=0'; setUser(null); setStatus('Logged out'); }); }}>
+            <button type="button" onClick={() => { fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => { setUser(null); setStatus('Logged out'); }); }}>
               Logout
             </button>
           ) : (

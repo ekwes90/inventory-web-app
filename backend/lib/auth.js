@@ -19,11 +19,17 @@ export function signRefreshToken(user, jti) {
 }
 
 export function authenticateToken(req, res, next) {
+  // Check Authorization header first (fallback), then HttpOnly access cookie
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid authorization header' });
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.cookies && req.cookies.accessToken) {
+    token = req.cookies.accessToken;
   }
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'Missing or invalid authorization header or cookie' });
+  }
   try {
     const payload = jwt.verify(token, ACCESS_JWT_SECRET);
     req.user = payload;

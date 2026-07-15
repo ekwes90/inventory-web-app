@@ -22,7 +22,14 @@ router.post('/login', async (req, res) => {
   const refresh = signRefreshToken(user, jti);
   addRefreshToken(jti);
 
-  // set HttpOnly refresh cookie
+  // set HttpOnly access cookie (short-lived) and refresh cookie (longer-lived)
+  res.cookie('accessToken', access, {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 15 * 60 * 1000 // 15 minutes
+  });
+
   res.cookie('refreshToken', refresh, {
     httpOnly: true,
     sameSite: 'lax',
@@ -30,7 +37,8 @@ router.post('/login', async (req, res) => {
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   });
 
-  res.json({ token: access, user: { username: user.username, role: user.role } });
+  // Return user info only; access token is in HttpOnly cookie
+  res.json({ user: { username: user.username, role: user.role } });
 });
 
 // Refresh: rotate refresh token and return new access token
@@ -59,8 +67,16 @@ router.post('/refresh', (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
+    // set new short-lived access cookie
     const access = signAccessToken(user);
-    res.json({ token: access });
+    res.cookie('accessToken', access, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000
+    });
+
+    res.json({ ok: true });
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
@@ -81,7 +97,9 @@ router.post('/logout', (req, res) => {
   } catch (err) {
     // ignore invalid token
   }
+  // clear both cookies
   res.clearCookie('refreshToken', { path: '/api/auth' });
+  res.clearCookie('accessToken', { path: '/' });
   res.json({ ok: true });
 });
 

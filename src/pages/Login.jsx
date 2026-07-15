@@ -24,10 +24,7 @@ export default function LoginPage() {
         throw new Error(body.error || `Login failed: ${res.status}`);
       }
       const body = await res.json();
-      // store access token in a non-HttpOnly cookie; refresh token is set as HttpOnly cookie by the server
-      if (body.token) {
-        document.cookie = 'inventory_token=' + encodeURIComponent(body.token) + '; path=/';
-      }
+      // server sets HttpOnly access and refresh cookies; nothing to store in JS
       // navigate home
       navigate('/');
       window.location.reload();
