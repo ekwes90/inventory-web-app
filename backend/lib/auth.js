@@ -1,10 +1,20 @@
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'inventory-secret';
+const ACCESS_JWT_SECRET = process.env.JWT_SECRET || 'inventory-secret';
+const REFRESH_JWT_SECRET = process.env.REFRESH_JWT_SECRET || 'inventory-refresh-secret';
 
-export function signToken(user) {
-  return jwt.sign({ username: user.username, role: user.role }, JWT_SECRET, {
-    expiresIn: '8h'
+export function signAccessToken(user) {
+  return jwt.sign({ username: user.username, role: user.role }, ACCESS_JWT_SECRET, {
+    expiresIn: process.env.ACCESS_TOKEN_EXPIRES || '15m'
+  });
+}
+
+export function signRefreshToken(user, jti) {
+  // jti should be a unique identifier for refresh token rotation
+  return jwt.sign({ username: user.username }, REFRESH_JWT_SECRET, {
+    expiresIn: process.env.REFRESH_TOKEN_EXPIRES || '7d',
+    jwtid: jti || randomUUID()
   });
 }
 
@@ -15,7 +25,7 @@ export function authenticateToken(req, res, next) {
   }
   const token = authHeader.split(' ')[1];
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, ACCESS_JWT_SECRET);
     req.user = payload;
     next();
   } catch (error) {

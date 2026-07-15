@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +15,8 @@ let db = {
     { username: 'staff', password: 'staff123', role: 'staff' }
   ],
   items: [],
-  stock_transactions: []
+  stock_transactions: [],
+  refresh_tokens: []
 };
 
 async function saveData() {
@@ -28,6 +30,22 @@ async function loadData() {
   } catch (error) {
     await saveData();
   }
+  // Ensure passwords are hashed (simple heuristic: bcrypt hashes start with $2)
+  let changed = false;
+  for (const user of db.users) {
+    if (!user.password || typeof user.password !== 'string') continue;
+    if (!user.password.startsWith('$2')) {
+      // hash and replace
+      const hash = bcrypt.hashSync(user.password, 10);
+      user.password = hash;
+      changed = true;
+    }
+  }
+  if (!Array.isArray(db.refresh_tokens)) {
+    db.refresh_tokens = [];
+    changed = true;
+  }
+  if (changed) await saveData();
 }
 
 export async function initDatabase() {
@@ -53,6 +71,33 @@ export async function initDatabase() {
 
 export function getUser(username) {
   return db.users.find((user) => user.username === username);
+}
+
+export function validatePassword(user, plain) {
+  if (!user || !user.password) return false;
+  return bcrypt.compareSync(plain, user.password);
+}
+
+// Store refresh token identifiers (jti) for rotation and revocation
+export function addRefreshToken(jti) {
+  if (!jti) return;
+  db.refresh_tokens.push(jti);
+  // best-effort save
+  saveData();
+}
+
+export function removeRefreshToken(jti) {
+  const idx = db.refresh_tokens.indexOf(jti);
+  if (idx !== -1) {
+    db.refresh_tokens.splice(idx, 1);
+    saveData();
+    return true;
+  }
+  return false;
+}
+
+export function hasRefreshToken(jti) {
+  return db.refresh_tokens.includes(jti);
 }
 
 export function getItems({ q, category } = {}) {
