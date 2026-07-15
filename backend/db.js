@@ -49,7 +49,7 @@ async function loadData() {
   const migrated = db.refresh_tokens.map((rt) => {
     if (!rt) return null;
     if (typeof rt === 'string') {
-      return { jti: rt, username: null, issued_at: new Date().toISOString() };
+      return { jti: rt, username: null, deviceId: null, issued_at: new Date().toISOString() };
     }
     return rt;
   }).filter(Boolean);
@@ -91,9 +91,9 @@ export function validatePassword(user, plain) {
 }
 
 // Store refresh token objects { jti, username, issued_at } for rotation and revocation
-export function addRefreshToken(jti, username) {
+export function addRefreshToken(jti, username, deviceId) {
   if (!jti) return;
-  db.refresh_tokens.push({ jti, username: username || null, issued_at: new Date().toISOString() });
+  db.refresh_tokens.push({ jti, username: username || null, deviceId: deviceId || null, issued_at: new Date().toISOString() });
   // best-effort save
   saveData();
 }
@@ -112,10 +112,21 @@ export function hasRefreshToken(jti) {
   return db.refresh_tokens.some((t) => t.jti === jti);
 }
 
+export function findRefreshToken(jti) {
+  return db.refresh_tokens.find((t) => t.jti === jti) || null;
+}
+
 export function removeAllRefreshTokensForUser(username) {
   if (!username) return;
   const before = db.refresh_tokens.length;
   db.refresh_tokens = db.refresh_tokens.filter((t) => t.username !== username);
+  if (db.refresh_tokens.length !== before) saveData();
+}
+
+export function removeRefreshTokensForDevice(username, deviceId) {
+  if (!username || !deviceId) return;
+  const before = db.refresh_tokens.length;
+  db.refresh_tokens = db.refresh_tokens.filter((t) => !(t.username === username && t.deviceId === deviceId));
   if (db.refresh_tokens.length !== before) saveData();
 }
 
