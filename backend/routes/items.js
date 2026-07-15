@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { authenticateToken, authorizeRole } from '../lib/auth.js';
+import { authenticateToken, authorizeRole, verifyCsrf } from '../lib/auth.js';
 import { getItems, getItem, createItem, updateItem, deleteItem } from '../db.js';
 
 const router = Router();
+// require authentication for all item routes
 router.use(authenticateToken);
+// verify CSRF for unsafe methods
+router.use(verifyCsrf);
 
 router.get('/', (req, res) => {
   const items = getItems(req.query);
